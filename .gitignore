@@ -1,0 +1,31 @@
+# C++ build artifacts
+*.exe
+*.obj
+*.o
+*.pdb
+*.ilk
+*.res
+*.aps
+*.idb
+*.ncb
+*.suo
+*.user
+*.sdf
+*.ipch
+*.tlog
+*.lastbuildstate
+*.log
+
+# Dev-C++ output
+*.layout
+Makefile.win
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
