@@ -79,3 +79,11 @@ Chess-for-EasyX/
 ## 许可证
 
 MIT License - 详见 [LICENSE](LICENSE) 文件
+
+<img width="1026" height="784" alt="QQ截图20260715142950" src="https://github.com/user-attachments/assets/29ad0608-b2d9-4b00-bc9f-ec5026f3f531" />
+<img width="646" height="669" alt="QQ截图20260715142915" src="https://github.com/user-attachments/assets/e72445ec-281b-43b1-beb9-de359ad6a7ac" />
+<img width="481" height="572" alt="QQ截图20260715142857" src="https://github.com/user-attachments/assets/c8aa4b2c-b140-4429-ba33-7cbdb42e4487" />
+<img width="616" height="699" alt="QQ截图20260715142825" src="https://github.com/user-attachments/assets/3366c914-7589-4c6d-a128-09075c03306e" />
+<img width="666" height="689" alt="QQ截图20260715142800" src="https://github.com/user-attachments/assets/c18f63fb-9667-4564-a6a6-83ce1876fcb9" />
+<img width="506" height="549" alt="QQ截图20260715142742" src="https://github.com/user-attachments/assets/1263175e-994a-4061-8155-c7cc3c8132cd" />
+
