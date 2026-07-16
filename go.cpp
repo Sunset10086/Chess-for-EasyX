@@ -44,7 +44,7 @@ static void goDrawAllChess();
 static bool goGetGrid(int mx, int my, int &r, int &c);
 static void goDrawPreview(int x, int y, int player);
 static int getQi(int r, int c, int color, bool visited[GO_SIZE][GO_SIZE]);
-static void removeDead(int color, vector<pair<int, int>> &delList);
+static void removeDead(int simBoard[GO_SIZE][GO_SIZE], int color, vector<pair<int, int>> &delList);
 static bool isForbidden(int r, int c, int color);
 static void drawButton();
 static int checkButtonClick(int mx, int my);
@@ -53,6 +53,7 @@ static int bfsTerritory(int startR, int startC, bool vis[GO_SIZE][GO_SIZE]);
 static void calcScore(int &blackTotal, int &whiteTotal);
 static void clearGroup(int r, int c, int color);
 static void judgeWinner();
+static int getQiSim(int sim[GO_SIZE][GO_SIZE],int r, int c, int color, bool visited[GO_SIZE][GO_SIZE]);
 
 // 重置围棋对局
 void resetGoGame() {
@@ -126,14 +127,10 @@ void drawButton() {
 
 // 执行一次悔棋，恢复上一步棋盘状态
 void undoStep() {
-	if(stepStack.empty()) return; // 无落子，不能悔棋
+	if(stepStack.empty()) return;
 	Step last = stepStack.back();
 	stepStack.pop_back();
-
-	// 1. 移除刚下的棋子
 	goBoard[last.r][last.c] = 0;
-
-	// 2. 恢复被提走的棋子，修正提子计数
 	for(auto p : last.captureList) {
 		int cr = p.first;
 		int cc = p.second;
@@ -143,10 +140,11 @@ void undoStep() {
 		captureWhite -= last.captureList.size();
 	else
 		captureBlack -= last.captureList.size();
-
-	// 3. 回退玩家到上一手
 	goPlayer = last.color;
-	passCount = 0; // 清空连续Pass计数
+	passCount = 0;
+	// 新增：悔棋取消终局界面
+	gameEnd = false;
+	winner = 0;
 }
 
 
@@ -258,67 +256,100 @@ int getQi(int r, int c, int color, bool visited[GO_SIZE][GO_SIZE]) {
 	return qi;
 }
 
-// 移除无气棋子
-// 移除无气棋子，同时返回被清除棋子坐标列表
-void removeDead(int color, vector<pair<int, int>> &delList) {
+// 仅收集指定颜色无气棋子坐标，不修改原棋盘
+void removeDead(int simBoard[GO_SIZE][GO_SIZE], int color, vector<pair<int, int>> &delList) {
 	delList.clear();
 	bool vis[GO_SIZE][GO_SIZE] = {false};
 	for(int i=0; i<GO_SIZE; i++) {
 		for(int j=0; j<GO_SIZE; j++) {
-			if(goBoard[i][j] == color && !vis[i][j]) {
-				bool tmpVis[GO_SIZE][GO_SIZE] = {false};
-				int qi = getQi(i,j,color,tmpVis);
+			if(simBoard[i][j] == color && !vis[i][j]) {
+				bool groupVis[GO_SIZE][GO_SIZE] = {false};
+				// 计算这团棋的气，同时标记棋块所有坐标到groupVis
+				int qi = getQiSim(simBoard, i, j, color, groupVis);
+				// 无气 → 把这团棋所有坐标加入删除列表
 				if(qi == 0) {
-					// 收集整块死棋
+					for(int x=0; x<GO_SIZE; x++) {
+						for(int y=0; y<GO_SIZE; y++) {
+							if(groupVis[x][y]) {
+								delList.emplace_back(x, y);
+								vis[x][y] = true; // 标记全局已访问
+							}
+						}
+					}
+				} else {
+					// 有气 → 也标记全局已访问，避免重复扫描
 					for(int x=0; x<GO_SIZE; x++)
 						for(int y=0; y<GO_SIZE; y++)
-							if(tmpVis[x][y]) {
-								goBoard[x][y] = 0;
-								delList.emplace_back(x, y);
-							}
+							if(groupVis[x][y])
+								vis[x][y] = true;
 				}
 			}
 		}
 	}
 }
+// 配套：支持模拟棋盘计算气的函数
+int getQiSim(int sim[GO_SIZE][GO_SIZE],int r, int c, int color, bool visited[GO_SIZE][GO_SIZE]) {
+	if(r<0||r>=GO_SIZE||c<0||c>=GO_SIZE) return 0;
+	if(visited[r][c]) return 0;
+	if(sim[r][c] == 0) return 1;
+	if(sim[r][c] != color) return 0;
+	visited[r][c] = true;
+	int qi = 0;
+	qi += getQiSim(sim,r-1,c,color,visited);
+	qi += getQiSim(sim,r+1,c,color,visited);
+	qi += getQiSim(sim,r,c-1,color,visited);
+	qi += getQiSim(sim,r,c+1,color,visited);
+	return qi;
+}
 
 // 判断落子是否为禁着点
 bool isForbidden(int r, int c, int color) {
-	goBoard[r][c] = color;
-	bool vis[GO_SIZE][GO_SIZE] = {false};
-	int selfQi = getQi(r,c,color,vis);
-	// 先提对方棋子
+	int sim[GO_SIZE][GO_SIZE];
+	for(int a=0; a<GO_SIZE; a++)
+		for(int b=0; b<GO_SIZE; b++)
+			sim[a][b] = goBoard[a][b];
+	sim[r][c] = color;
+
 	int enemy = (color == 1) ? 2 : 1;
 	vector<pair<int, int>> tempDel;
-	removeDead(enemy, tempDel);
-	// 重新计算自身气
+	removeDead(sim, enemy, tempDel);
+	//模拟棋盘上真正删掉被吃的棋子，再算自己的气
+	for(auto p : tempDel)
+		sim[p.first][p.second] = 0;
+
 	bool vis2[GO_SIZE][GO_SIZE] = {false};
-	int newQi = getQi(r,c,color,vis2);
-	// 恢复棋盘
-	goBoard[r][c] = 0;
-	// 下进去无气且不能提对方 = 禁着点
-	if(selfQi == 0 && newQi == 0)
-		return true;
-	return false;
+	int newQi = getQiSim(sim, r, c, color, vis2);
+	// 吃完对方后自己还是没气 → 才是禁着点
+	return newQi == 0;
 }
 // 终局计算双方总地盘（棋子+空点）
 static void calcScore(int &blackTotal, int &whiteTotal) {
+	// ========= 新增终局自动移除所有死棋 =========
+	vector<pair<int, int>> tempDel;
+	// 移除所有白方死棋（黑的俘虏）
+	removeDead(goBoard, 2, tempDel);
+	for(auto p : tempDel) goBoard[p.first][p.second] = 0;
+	captureBlack += tempDel.size();
+	tempDel.clear();
+	// 移除所有黑方死棋（白的俘虏）
+	removeDead(goBoard, 1, tempDel);
+	for(auto p : tempDel) goBoard[p.first][p.second] = 0;
+	captureWhite += tempDel.size();
+
 	blackTotal = 0;
 	whiteTotal = 0;
 	bool vis[GO_SIZE][GO_SIZE] = {false};
-	// 1. 统计棋盘上所有己方棋子
+	// 原有统计逻辑不变
 	for(int r=0; r<GO_SIZE; r++) {
 		for(int c=0; c<GO_SIZE; c++) {
 			if(goBoard[r][c] == 1) blackTotal++;
 			if(goBoard[r][c] == 2) whiteTotal++;
 			if(vis[r][c] || goBoard[r][c] != 0) continue;
-			// 空白区域BFS，判断归属
 			int owner = bfsTerritory(r,c,vis);
 			if(owner == 1) blackTotal++;
 			else if(owner == 2) whiteTotal++;
 		}
 	}
-	// 加上提子数量（提对方一子等于多占1点）
 	blackTotal += captureWhite;
 	whiteTotal += captureBlack;
 }
@@ -338,7 +369,6 @@ static void judgeWinner() {
 }
 
 // 围棋主窗口循环，对外接口
-// 围棋对外入口函数（完整干净版本）
 void runGo() {
 	resetGoGame();
 	int winW = GO_OFFSET*2 + GO_SIZE*GO_GRID;
@@ -439,28 +469,50 @@ void runGo() {
 
 		// 3. 左键落子
 		if (m.uMsg == WM_LBUTTONDOWN && canPut) {
+			int simBoard[GO_SIZE][GO_SIZE];
+			// 复制当前全局棋盘到模拟棋盘
+			for(int a=0; a<GO_SIZE; a++)
+				for(int b=0; b<GO_SIZE; b++)
+					simBoard[a][b] = goBoard[a][b];
+			// 模拟棋盘先落子，才能算出吃子
+			simBoard[r][c] = goPlayer;
 			if (isForbidden(r, c, goPlayer))
 				continue;
-
 			Step newStep;
 			newStep.r = r;
 			newStep.c = c;
 			newStep.color = goPlayer;
-			goBoard[r][c] = goPlayer;
-
 			int enemy = goPlayer == 1 ? 2 : 1;
 			vector<pair<int, int>> del;
-			removeDead(enemy, del);
-			newStep.captureList = del;
+			vector<pair<int, int>> selfDel;
 
+			// 模拟棋盘提对方死棋
+			removeDead(simBoard, enemy, del);
+			newStep.captureList = del;
+			// 真实棋盘落子
+			goBoard[r][c] = goPlayer;
+			//真实删除所有被吃掉的棋子
+			for(auto p : del) {
+				int cr = p.first;
+				int cc = p.second;
+				goBoard[cr][cc] = 0;
+			}
+			// 更新提子计数
 			if (enemy == 2)
 				captureWhite += del.size();
 			else
 				captureBlack += del.size();
 
-			removeDead(goPlayer, del);
-			stepStack.push_back(newStep);
+			// 处理自提（模拟棋盘）
+			removeDead(simBoard, goPlayer, selfDel);
+			// 真实删除自提棋子
+			for(auto p : selfDel) {
+				int cr = p.first;
+				int cc = p.second;
+				goBoard[cr][cc] = 0;
+			}
 
+			stepStack.push_back(newStep);
 			goPlayer = goPlayer == 1 ? 2 : 1;
 			passCount = 0;
 		}

@@ -145,7 +145,15 @@ static bool isBigArea(int r, int c) {
 		return (r >= 2 && r <= 8);
 	return false;
 }
-
+// 参数：r,c 坐标；side 0红/1蓝
+static bool IsOwnBigArea(int r, int c, int side) {
+	int logicC = REAL_TO_LOGIC_C(c);
+	int inRange = (r >= 2 && r <= 8);
+	if (side == 0) // 红方自家：左侧大禁区 logic1~3
+		return inRange && (logicC >= 1 && logicC <= 3);
+	else // 蓝方自家：右侧大禁区 logic13~15
+		return inRange && (logicC >= 13 && logicC <= 15);
+}
 // 判断逻辑坐标是否为球门
 static bool isGoalLogic(int r, int logicC, int side) {
 	if (side == 0) {
@@ -157,10 +165,12 @@ static bool isGoalLogic(int r, int logicC, int side) {
 	}
 }
 static int getSide(int r, int c) {
+	// 先判断行列是否越界，越界直接返回无棋子
+	if (r < 0 || r >= ROWS || c < 0 || c >= COLS_REAL)
+		return -1;
 	int val = board[r][c];
-	if (val == 0 || val == BALL) return -1;
-	if (val <= 11)  return 0;  // 1~11 = 红
-	if (val >= 101) return 1;  // 101~111 = 蓝
+	if (val >= 1 && val <= 11) return 0;
+	if (val >= 101 && val <= 111) return 1;
 	return -1;
 }
 static bool CheckLayoutRule(int r, int c, int selPiece) {
@@ -242,19 +252,31 @@ static bool canMove(int sr, int sc, int tr, int tc) {
 	bool srcInBig = isBigArea(sr, sc);
 	bool tarInBig = isBigArea(tr, tc);
 
-	// 门将：全场斜线，禁区内无距离限制，禁区外只能走一格斜线
+	// 门将：仅双方各自大区内可无限制斜线，敌方禁区只能一格
 	if (piece == GOALKEEPER || piece == 101) {
-		if (absDr != absDc && dr != 0 && dc != 0)
+		int srcSide = getSide(sr, sc);
+		int absDr = abs(dr);
+		int absDc = abs(dc);
+		// 允许移动类型：纯横、纯竖、纯斜线
+		bool isLine = (dr == 0 || dc == 0 || absDr == absDc);
+		if (!isLine)
 			return false;
-		if (!srcInBig || !tarInBig) {
-			if (absDr > 1 || absDc > 1)
+
+		bool srcOwn = IsOwnBigArea(sr, sc, srcSide);
+		bool tarOwn = IsOwnBigArea(tr, tc, srcSide);
+		// 两端不全在己方大禁区 → 只能一格斜线，且不能长横竖
+		if (!(srcOwn && tarOwn)) {
+			// 不在自家大区，仅允许一格斜线；长横竖直接禁止
+			if ((absDr > 1 || absDc > 1) || (dr > 1 || dc > 1))
 				return false;
 		}
+
+		// 路径阻挡检测
 		int stepR = dr == 0 ? 0 : dr / absDr;
 		int stepC = dc == 0 ? 0 : dc / absDc;
 		int nr = sr + stepR, nc = sc + stepC;
 		while (nr != tr || nc != tc) {
-			if (board[nr][nc] != 0 && board[nr][nc] != BALL)
+			if (board[nr][nc] != 0 && board[nr][nc] == BALL)
 				return false;
 			nr += stepR;
 			nc += stepC;
@@ -262,9 +284,9 @@ static bool canMove(int sr, int sc, int tr, int tc) {
 		return true;
 	}
 
-	// 自由人（2/102）：上下左右一格
+	// 自由后卫（2/102）：上下左右斜向一格
 	if (piece == LIBACK || piece == 102) {
-		if ((absDr == 1 && dc == 0) || (absDc == 1 && dr == 0))
+		if (absDr <= 1 && absDc <= 1 && !(dr == 0 && dc == 0))
 			return true;
 		return false;
 	}
@@ -278,7 +300,7 @@ static bool canMove(int sr, int sc, int tr, int tc) {
 		return true;
 	}
 
-	// 中场（7/8 / 107/108）：斜线直线，无距离限制，不能穿棋子
+	// 前卫（7/8 / 107/108）：斜线直线，无距离限制，不能穿棋子
 	if ((piece == MID1 || piece == MID2) || (piece == 107 || piece == 108)) {
 		if (absDr != absDc)
 			return false;
@@ -286,7 +308,7 @@ static bool canMove(int sr, int sc, int tr, int tc) {
 		int stepC = dc == 0 ? 0 : dc / abs(dc);
 		int nr = sr + stepR, nc = sc + stepC;
 		while (nr != tr || nc != tc) {
-			if (board[nr][nc] != 0 && board[nr][nc] != BALL)
+			if (board[nr][nc] != 0 || board[nr][nc] == BALL)
 				return false;
 			nr += stepR;
 			nc += stepC;
@@ -302,7 +324,7 @@ static bool canMove(int sr, int sc, int tr, int tc) {
 		int stepC = dc == 0 ? 0 : dc / absDc;
 		int nr = sr + stepR, nc = sc + stepC;
 		while (nr != tr || nc != tc) {
-			if (board[nr][nc] != 0 && board[nr][nc] != BALL)
+			if (board[nr][nc] != 0 || board[nr][nc] == BALL)
 				return false;
 			nr += stepR;
 			nc += stepC;
@@ -318,7 +340,7 @@ static bool canMove(int sr, int sc, int tr, int tc) {
 		int stepC = dc == 0 ? 0 : dc / absDc;
 		int nr = sr + stepR, nc = sc + stepC;
 		while (nr != tr || nc != tc) {
-			if (board[nr][nc] != 0 && board[nr][nc] != BALL)
+			if (board[nr][nc] != 0 || board[nr][nc] == BALL)
 				return false;
 			nr += stepR;
 			nc += stepC;
@@ -1150,6 +1172,7 @@ void runFootball() {
 		EndBatchDraw();
 		if (!layoutOk) {
 			layoutOk = layoutPhase(winW, winH);
+			if (!layoutOk) return;
 		}
 		while (MouseHit()) {
 			m = GetMouseMsg();

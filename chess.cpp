@@ -152,26 +152,57 @@ bool canMove(int sr, int sc, int tr, int tc) {
 
 	// 王
 	if (piece == 1 || piece == 7) {
-		if(absR == 0 && absC == 2) {
-			if(side == 0 && sr == 7 && sr == tr) {
-				if(tc == 6 && castlingAvail[0] && castlingAvail[2]
-				        && board[7][5]==0 && board[7][6]==0)
-					pseudoLegal = true;
-				if(tc == 2 && castlingAvail[0] && castlingAvail[1]
-				        && board[7][3]==0 && board[7][2]==0 && board[7][1]==0)
-					pseudoLegal = true;
-			}
-			if(side == 1 && sr == 0 && sr == tr) {
-				if(tc == 6 && castlingAvail[3] && castlingAvail[5]
-				        && board[0][5]==0 && board[0][6]==0)
-					pseudoLegal = true;
-				if(tc == 2 && castlingAvail[3] && castlingAvail[4]
-				        && board[0][3]==0 && board[0][2]==0 && board[0][1]==0)
-					pseudoLegal = true;
-			}
-		}
+		int side = getPieceSide(sr, sc);
+		// 普通单格移动
 		if(absR <= 1 && absC <= 1)
 			pseudoLegal = true;
+		// 王车易位
+		if(absR == 0 && absC == 2) {
+			bool canCastle = false;
+			// 白王短易位
+			if(side == 0 && sr == 7 && sr == tr && tc == 6) {
+				if(castlingAvail[0] && castlingAvail[2]
+				        && board[7][5]==0 && board[7][6]==0)
+					canCastle = true;
+			}
+			// 白王长易位
+			if(side == 0 && sr == 7 && sr == tr && tc == 2) {
+				if(castlingAvail[0] && castlingAvail[1]
+				        && board[7][3]==0 && board[7][2]==0 && board[7][1]==0)
+					canCastle = true;
+			}
+			// 黑王短易位
+			if(side == 1 && sr == 0 && sr == tr && tc == 6) {
+				if(castlingAvail[3] && castlingAvail[5]
+				        && board[0][5]==0 && board[0][6]==0)
+					canCastle = true;
+			}
+			// 黑王长易位
+			if(side == 1 && sr == 0 && sr == tr && tc == 2) {
+				if(castlingAvail[3] && castlingAvail[4]
+				        && board[0][3]==0 && board[0][2]==0 && board[0][1]==0)
+					canCastle = true;
+			}
+
+			// ===== 新增三条易位禁令 =====
+			if (canCastle) {
+				int enemySide = 1 - side;
+				// 规则1：王现在被将军，禁止易位
+				if (isAttacked(sr, sc, enemySide))
+					canCastle = false;
+
+				// 规则2：王途经格子会被攻击，禁止易位
+				int midCol = (sc + tc) / 2;
+				if (isAttacked(sr, midCol, enemySide))
+					canCastle = false;
+
+				// 规则3：易位终点王仍被攻击（模拟走子会拦截，这里双重保险）
+				if (isAttacked(tr, tc, enemySide))
+					canCastle = false;
+			}
+			if (canCastle)
+				pseudoLegal = true;
+		}
 	}
 	// 后
 	else if (piece == 2 || piece == 8) {
@@ -386,6 +417,7 @@ void undoStep() {
 	// 恢复过路兵
 	enPassantRow = s.enPassantRow;
 	enPassantCol = s.enPassantCol;
+	needPromote = false;
 	// 清空选中
 	selRow = -1;
 	selCol = -1;
@@ -393,11 +425,27 @@ void undoStep() {
 }
 // 仅判断坐标(r,c)是否被attackerSide的棋子攻击（纯路径，不校验送王）
 bool isAttacked(int r, int c, int attackerSide) {
+	// 第一步：单独检测对方的王（八邻格直接攻击，射线逻辑检测不到）
+	for(int dr = -1; dr <= 1; dr++) {
+		for(int dc = -1; dc <= 1; dc++) {
+			int nr = r + dr;
+			int nc = c + dc;
+			if(nr <0 || nr >=8 || nc <0 || nc >=8) continue;
+			int p = board[nr][nc];
+			if(attackerSide == 0) {
+				if(p == 1) // 敌方白王
+					return true;
+			} else {
+				if(p == 7) // 敌方黑王
+					return true;
+			}
+		}
+	}
+
 	// 八方向：王、后、车、象
 	int dirs[8][2] = {{-1,0},{1,0},{0,-1},{0,1},{-1,-1},{-1,1},{1,-1},{1,1}};
 	// 马8个点位
-	int knightDir[8][2] = {{-2,-1},{-2,1},{-1,-2},{-1,2},{1,-2},{1,2},{2,-1},{2,1}};
-
+	int knightDir[8][2] = {{-2,-1},{-2,1},{-1,-2},{-1,2},{1,-2},{2,-1},{2,1}};
 	// 1. 马检测
 	for(int d=0; d<8; d++) {
 		int nr = r + knightDir[d][0];
@@ -407,8 +455,7 @@ bool isAttacked(int r, int c, int attackerSide) {
 		if(getPieceSide(nr, nc) == attackerSide && (p==5||p==11))
 			return true;
 	}
-
-	// 2. 八方向直线：车/象/后/王
+	// 2. 直线：车/象/后
 	for(int d=0; d<8; d++) {
 		int dr = dirs[d][0];
 		int dc = dirs[d][1];
@@ -422,32 +469,23 @@ bool isAttacked(int r, int c, int attackerSide) {
 				continue;
 			}
 			int pieceSide = getPieceSide(nr, nc);
-			//不是攻击方的棋子，障碍物阻断射线直接跳出
 			if(pieceSide != attackerSide) break;
-			// 王 一步攻击范围
-			if((p==1||p==7) && abs(nr-r)==1 && abs(nc-c)==1)
-				return true;
-			// 车：横向纵向方向
-			if((p==3||p==9) && (dr==0||dc==0))
-				return true;
-			// 象：斜线方向
-			if((p==4||p==10) && dr!=0 && dc!=0)
-				return true;
-			// 后任意方向
-			if(p==2||p==8)
-				return true;
-			//命中同阵营非对应兵种，停止扫描
+			// 车
+			if((p==3||p==9) && (dr==0||dc==0)) return true;
+			// 象
+			if((p==4||p==10) && dr!=0 && dc!=0) return true;
+			// 后
+			if(p==2||p==8) return true;
 			break;
 		}
 	}
-
-	// 3. 兵斜向前攻击
-	if(attackerSide == 0) { // 白方攻击：白兵(6)斜向上吃，目标格子的斜下方有白兵
+	// 3. 兵斜吃
+	if(attackerSide == 0) { //白兵向上斜攻
 		if(r + 1 < 8) {
 			if(c - 1 >= 0 && board[r+1][c-1]==6) return true;
 			if(c + 1 < 8 && board[r+1][c+1]==6) return true;
 		}
-	} else { // 黑方攻击：黑兵(12)斜向下吃，目标格子的斜上方有黑兵
+	} else { //黑兵向下斜攻
 		if(r - 1 >= 0) {
 			if(c - 1 >= 0 && board[r-1][c-1]==12) return true;
 			if(c + 1 < 8 && board[r-1][c+1]==12) return true;
@@ -845,6 +883,11 @@ void runChess() {
 						selCol = -1;
 						memset(validGrid, 0, sizeof(validGrid));
 					}
+					// 走子结束后检查车是否被吃，被吃则关闭对应易位权限
+					if(board[7][0] != 3) castlingAvail[1] = false;
+					if(board[7][7] != 3) castlingAvail[2] = false;
+					if(board[0][0] != 9) castlingAvail[4] = false;
+					if(board[0][7] != 9) castlingAvail[5] = false;
 				}
 			}
 		}

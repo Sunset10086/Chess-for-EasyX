@@ -20,6 +20,7 @@ static int player = 1;
 static bool gameOver = false;
 static int winner = 0;
 static bool backToMenu = false;
+static bool drawGame = false; // true = 和棋
 
 static void drawBackground();
 static void drawBoard();
@@ -30,6 +31,7 @@ static bool isWin(int r, int c, int chess);
 static void showWinScreen(int winW, int winH);
 static void drawGobangBtn();
 static bool isBackBtnClicked(int mx,int my);
+static int getTotalChess();
 
 void resetGame() {
 	for (int i = 0; i < SIZE; i++)
@@ -39,6 +41,15 @@ void resetGame() {
 	gameOver = false;
 	winner = 0;
 	backToMenu = false;
+	drawGame = false; // 新增重置和棋标记
+}
+
+static int getTotalChess() {
+	int cnt = 0;
+	for(int i=0; i<SIZE; i++)
+		for(int j=0; j<SIZE; j++)
+			if(board[i][j] != 0) cnt++;
+	return cnt;
 }
 
 // 绘制返回主菜单按钮
@@ -150,19 +161,18 @@ void showWinScreen(int winW, int winH) {
 		settextcolor(RED);
 		settextstyle(40, 0, "宋体");
 		setbkmode(TRANSPARENT);
-		if (winner == 1)
+		if (drawGame)
+			sprintf(text, "本局和棋！");
+		else if (winner == 1)
 			sprintf(text, "黑棋获胜！");
 		else
 			sprintf(text, "白棋获胜！");
 		outtextxy(winW / 2 - 100, winH / 2 - 40, text);
-
 		settextstyle(22, 0, "宋体");
-		setbkmode(TRANSPARENT);
 		settextcolor(RGB(0, 40, 180));
 		sprintf(text, "鼠标点击窗口任意位置重新开始");
 		outtextxy(winW / 2 - 200, winH / 2 + 20, text);
 		EndBatchDraw();
-
 		msg = GetMouseMsg();
 		if (msg.uMsg == WM_LBUTTONDOWN)
 			break;
@@ -222,6 +232,14 @@ void runGobang() {
 					winner = player;
 					while (MouseHit())
 						GetMouseMsg();
+				} else {
+					// 统计总棋子，15*15=225颗填满判和
+					int total = getTotalChess();
+					if(total >= SIZE * SIZE) {
+						gameOver = true;
+						drawGame = true;
+						winner = 0;
+					}
 				}
 				player = (player == 1) ? 2 : 1;
 			}
