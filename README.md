@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-使用 Dev-C++ 和 EasyX 图形库制作的棋类游戏合集，包含五种经典棋类游戏，全部使用 AI 辅助编程实现。
+使用 Dev-C++ 和 EasyX 图形库制作的棋类游戏合集，包含五子棋、围棋、中国象棋、国际象棋、高仕足球棋五种棋类游戏，全部使用 AI 辅助编程实现。
 
 ## 游戏列表
 
@@ -12,7 +12,7 @@
 | **围棋** (Go) | 19×19 棋盘，中国规则（贴目 3.75），BFS 区域计目 | 提子判定、劫争检测、禁自杀、虚手终局 |
 | **中国象棋** (Chinese Chess) | 10×9 棋盘，帅/仕/相/马/车/炮/兵完整规则 | 蹩马脚、塞象眼、将帅对面检测、将军/将死/困毙判定、悔棋 |
 | **国际象棋** (International Chess) | 8×8 棋盘，标准国际象棋规则 | 王车易位、吃过路兵、升变菜单、将军/将死/逼和判定、悔棋 |
-| **高仕足球棋** (Football Chess) | 11×15 棋盘，模拟足球对抗 | 11 个位置（守门员/自由人/后卫/前卫/前锋/中锋），详见规则文档 |
+| **高仕足球棋** (Football Chess) | 11×15 棋盘，模拟足球对抗 | 11 个位置（守门员/自由后卫/后卫/前卫/前锋/中锋），详见规则文档 |
 
 ![screenshot](https://raw.githubusercontent.com/Sunset10086/Chess-for-EasyX/main/screenshot.png)
 
